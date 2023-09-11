@@ -256,7 +256,7 @@ class Box(object):
 		buffer.write(this.name, position + 4, 'binary');
 		buffer.writeInt32BE(1, position + 8);
 		buffer.writeInt32BE(0, position + 12);
-		return buffer.write(source, position + 16, 'binary');
+		return buffer.write(source, position + 16, 'utf8');
 	}
 
 	/*

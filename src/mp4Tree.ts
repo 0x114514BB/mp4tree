@@ -52,7 +52,8 @@ export class MP4Tree {
 		const fd = await open(this.fileDir);
 
 		await this.root.recursiveParse(fd, 0);
-
+		await fd.close();
+		return this;
 		// Console.log(this.root.toString());
 	}
 
@@ -60,7 +61,9 @@ export class MP4Tree {
 		const result = this.root.getChild(name);
 		const fd = await open(this.fileDir);
 		if (result) {
-			return fd.read({buffer: Buffer.alloc(result.size), position: result.offset, length: result.size});
+			const value = await fd.read({buffer: Buffer.alloc(result.size), position: result.offset, length: result.size});
+			await fd.close();
+			return value;
 		}
 
 		return null;
