@@ -12,7 +12,8 @@ export class MP4Tree {
 		const nodeAtom = new MP4TreeAtom(name, ilst);
 		const dataAtom = new MP4TreeAtom('data', nodeAtom);
 		if (Buffer.isBuffer(content)) {
-			dataAtom.loadMetaDataBuffer(content);
+			const loadFunction = name === 'covr' ? dataAtom.loadMetaDataJpeg : dataAtom.loadMetaDataBuffer;
+			loadFunction(content);
 		} else {
 			dataAtom.loadMetaDataString(content);
 		}

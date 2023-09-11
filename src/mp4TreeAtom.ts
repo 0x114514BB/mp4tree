@@ -270,6 +270,8 @@ class Box(object):
 
         I treat cover input as binary data. Hence I will simply set the Class/Flag to 0.
         I Don't know how this value affects media players' cover extraction.
+
+		Update: Bento4 is right. This flag can be resolved by ffprobe.
     */
 
 	dumpBuffer(buffer: Buffer, source: Buffer, position: number) {
@@ -309,7 +311,7 @@ class Box(object):
 	// String length limit is required.
 	// actually metadata string lenght are not strictly limited under 255 bytes？
 	loadMetaDataString(source: string) {
-		this.data = Buffer.from(('\0\0\0\x01\0\0\0\0' + source).slice(0, 255 + 8), 'binary');
+		this.data = Buffer.from(('\0\0\0\x01\0\0\0\0' + source).slice(0, 255 + 8), 'utf8');
 		this.size = this.data.length;
 		return this;
 	}
@@ -317,6 +319,14 @@ class Box(object):
 	loadMetaDataBuffer(source: Buffer) {
 		this.data = Buffer.alloc(source.length + 8);
 		// "\0\0\0\0\0\0\0\0" + source
+		this.size = source.copy(this.data, 8) + 8; // 4 from 0000 4 from clas
+	}
+
+	loadMetaDataJpeg(source: Buffer) {
+		this.data = Buffer.alloc(source.length + 8);
+		// "\0\0\0\0\0\0\0\0" + source
+		// JPEG 14
+		this.data.writeInt32BE(14);
 		this.size = source.copy(this.data, 8) + 8; // 4 from 0000 4 from clas
 	}
 
