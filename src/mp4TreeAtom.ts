@@ -2,7 +2,7 @@
 import {type FileHandle} from 'node:fs/promises';
 // Nested like a tree.
 // eslint-disable-next-line @typescript-eslint/naming-convention
-export class MP4TreeNode {
+export class MP4TreeAtom {
 	// Atoms technically shouldn't have data AND children.
 	// but a bunch of them break this rule. This is not
 	// handled by this library yet - but this padding variable
@@ -12,20 +12,20 @@ export class MP4TreeNode {
 	padding = 0;
 	size = 0;
 	offset = 0;
-	children: MP4TreeNode[] = [];
+	children: MP4TreeAtom[] = [];
 	root = false;
 	name: string;
 	// Container has size|name buffer
 	data?: Buffer;
 
-	constructor(name: string, public parent?: MP4TreeNode, offset = 0) {
+	constructor(name: string, public parent?: MP4TreeAtom, offset = 0) {
 		if (name === 'root') {
 			this.root = true;
 			this.offset = offset;
 		}
 
 		if (name.length !== 4) {
-			throw new Error('MP4TreeNode must have name length of 4');
+			throw new Error('MP4TreeAtom must have name length of 4');
 		}
 
 		this.name = name;
@@ -52,12 +52,12 @@ export class MP4TreeNode {
 		return string;
 	}
 
-	getChild(name: string): MP4TreeNode | undefined {
+	getChild(name: string): MP4TreeAtom | undefined {
 		return this.children.find(child => child.name === name);
 	}
 
 	// Given a child path, separated by dots, return that child, or recursively create it
-	ensureChild(childName: string): MP4TreeNode {
+	ensureChild(childName: string): MP4TreeAtom {
 		const pathArray = childName.split('.');
 		const firstChild = pathArray[0]!;
 
@@ -75,10 +75,10 @@ export class MP4TreeNode {
 		return child;
 	}
 
-	addChild(node: string | MP4TreeNode, index?: number) {
-		let atom: MP4TreeNode;
+	addChild(node: string | MP4TreeAtom, index?: number) {
+		let atom: MP4TreeAtom;
 		if (typeof node === 'string') {
-			atom = new MP4TreeNode(node, this);
+			atom = new MP4TreeAtom(node, this);
 		} else {
 			atom = node;
 			atom.parent = this;
@@ -96,7 +96,7 @@ export class MP4TreeNode {
 		return atom;
 	}
 
-	replaceOrAddChild(name: string, newChild: MP4TreeNode) {
+	replaceOrAddChild(name: string, newChild: MP4TreeAtom) {
 		const childIndex = this.children.findIndex(child => child.name === name);
 		if (childIndex === -1) {
 			this.addChild(name);
@@ -192,7 +192,7 @@ class Box(object):
 
 			// This way to judge children is too coarse. Issue: sbgp roll error
 			if ((/[\xA9\w]{4}/.exec(boxName)) && boxSize <= this.size && boxSize >= 8) {
-				const child = new MP4TreeNode(boxName, this);
+				const child = new MP4TreeAtom(boxName, this);
 				child.size = boxSize;
 				if (child.name === 'meta') {
 					child.padding = 4;
@@ -230,7 +230,7 @@ class Box(object):
 		return this.size;
 	}
 
-	updateLeafNodeSize(content: string | Buffer, isMetaData = false) {
+	updateLeafAtomSize(content: string | Buffer, isMetaData = false) {
 		if (this.children.length !== 0) {
 			console.log('Only leaf node are allowed to load data.');
 		} else if (Buffer.isBuffer(content)) {
@@ -297,7 +297,7 @@ class Box(object):
 	dumpAll() {
 		const buffer = Buffer.alloc(this.size);
 		let position = 0;
-		let node: MP4TreeNode | undefined = this;
+		let node: MP4TreeAtom | undefined = this;
 		while (position < this.size) {
 			position = node?.dumpData(buffer, position) ?? Number.POSITIVE_INFINITY;
 			node = node?.hasNext();
@@ -329,7 +329,7 @@ class Box(object):
 		source.copy(this.data);
 	}
 
-	hasNext(rewind = false): MP4TreeNode | undefined {
+	hasNext(rewind = false): MP4TreeAtom | undefined {
 		if (!rewind && this.children.length) {
 			return this.children[0];
 		}

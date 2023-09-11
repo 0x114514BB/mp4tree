@@ -1,5 +1,5 @@
 /* eslint-disable complexity */
-import {MP4TreeNode} from './MP4TreeNode';
+import {MP4TreeAtom} from './mp4TreeAtom';
 import {open, stat} from 'node:fs/promises';
 import {createWriteStream} from 'node:fs';
 import {PassThrough} from 'node:stream';
@@ -8,9 +8,9 @@ import {pipeline} from 'stream/promises';
 // eslint-disable-next-line @typescript-eslint/naming-convention
 export class MP4Tree {
 	// MP4Tree
-	static createMetaDataNode = (name: string, ilst: MP4TreeNode, content: string | Buffer) => {
-		const nodeAtom = new MP4TreeNode(name, ilst);
-		const dataAtom = new MP4TreeNode('data', nodeAtom);
+	static createMetaDataAtom = (name: string, ilst: MP4TreeAtom, content: string | Buffer) => {
+		const nodeAtom = new MP4TreeAtom(name, ilst);
+		const dataAtom = new MP4TreeAtom('data', nodeAtom);
 		if (Buffer.isBuffer(content)) {
 			dataAtom.loadMetaDataBuffer(content);
 		} else {
@@ -24,13 +24,13 @@ export class MP4Tree {
 
 	isValid = false;
 	fileDir: string;
-	root: MP4TreeNode;
+	root: MP4TreeAtom;
 	size = -1;
 
 	constructor(input: string) {
 		this.fileDir = input;
 		// First thing to do is establish the root Atom - but from then on this can all be recursive.
-		this.root = new MP4TreeNode('root');
+		this.root = new MP4TreeAtom('root');
 
 		// This.isValid = this.root.hasChild('ftyp'); // moov is also a valid checker.
 	}
@@ -66,7 +66,7 @@ export class MP4Tree {
 		return null;
 	}
 
-	async replaceBox(boxStart: number, boxEnd: number, newNodeBuffer: Buffer, outFile: string) {
+	async replaceBox(boxStart: number, boxEnd: number, newAtomBuffer: Buffer, outFile: string) {
 		// 先检查outPath合法性
 		const fd = await open(this.fileDir);
 		// If autoClose, streamAfter will be closed by streamBefore as they share the same fileDescriptor.
@@ -74,7 +74,7 @@ export class MP4Tree {
 			end: boxStart,
 			autoClose: false,
 		});
-		const streamToReplace = new PassThrough().end(newNodeBuffer);
+		const streamToReplace = new PassThrough().end(newAtomBuffer);
 		const streamAfter = fd.createReadStream({
 			start: boxEnd,
 			autoClose: false,
@@ -84,7 +84,7 @@ export class MP4Tree {
 			await Promise.all([
 				pipeline(streamBefore, createWriteStream(outFile, {start: 0})),
 				pipeline(streamToReplace, createWriteStream(outFile, {start: boxStart})),
-				pipeline(streamAfter, createWriteStream(outFile, {start: boxStart + newNodeBuffer.length})),
+				pipeline(streamAfter, createWriteStream(outFile, {start: boxStart + newAtomBuffer.length})),
 			]);
 			streamBefore.close();
 			streamAfter.close();
@@ -104,21 +104,21 @@ export class MP4Tree {
 		cover?: string | Buffer;
 	}) {
 		const extractedBuffer = (await this.extractBoxBuffer('moov'))?.buffer;
-		const moovNode = this.root.getChild('moov') ?? new MP4TreeNode('moov');
-		const boxStart = moovNode.offset;
-		const boxEnd = moovNode.offset + moovNode.size;
+		const moovAtom = this.root.getChild('moov') ?? new MP4TreeAtom('moov');
+		const boxStart = moovAtom.offset;
+		const boxEnd = moovAtom.offset + moovAtom.size;
 
 		// 把moov其他data先存下来
-		if (moovNode && extractedBuffer) {
-			moovNode.parent = undefined;
-			let iter: MP4TreeNode | undefined = moovNode;
+		if (moovAtom && extractedBuffer) {
+			moovAtom.parent = undefined;
+			let iter: MP4TreeAtom | undefined = moovAtom;
 			while (iter) {
 				console.log(`${iter.name}: ${iter.offset}, ${iter.size}`);
 				if (!iter.getPath().startsWith('moov.udta.meta')) {
 					// Should dump
 					if (!iter.children.length) {
 						iter.data = Buffer.alloc(iter.size - 8);
-						extractedBuffer.copy(iter.data, 0, iter.offset + 8 - moovNode.offset, iter.offset + iter.size - moovNode.offset);
+						extractedBuffer.copy(iter.data, 0, iter.offset + 8 - moovAtom.offset, iter.offset + iter.size - moovAtom.offset);
 					}
 				}
 
@@ -126,40 +126,40 @@ export class MP4Tree {
 			}
 		}
 
-		const udtaNode = moovNode.getChild('udta') ?? new MP4TreeNode('udta', moovNode);
+		const udtaAtom = moovAtom.getChild('udta') ?? new MP4TreeAtom('udta', moovAtom);
 
 		// Add new meta node
-		const metaNode = new MP4TreeNode('meta'); // Meta node is added by replaceOrAdd
-		metaNode.padding = 4;
-		const hdlr = new MP4TreeNode('hdlr', metaNode);
+		const metaAtom = new MP4TreeAtom('meta'); // Meta node is added by replaceOrAdd
+		metaAtom.padding = 4;
+		const hdlr = new MP4TreeAtom('hdlr', metaAtom);
 		hdlr.loadMetaDataBuffer(Buffer.from('mdirappl\0\0\0\0\0\0\0\0\0'));
-		// Hdlr.updateLeafNodeSize("mdirappl\0\0\0\0\0\0\0\0\0", true);
-		metaNode.addChild(hdlr);
+		// Hdlr.updateLeafAtomSize("mdirappl\0\0\0\0\0\0\0\0\0", true);
+		metaAtom.addChild(hdlr);
 
-		const ilstNode = new MP4TreeNode('ilst', metaNode);
+		const ilstAtom = new MP4TreeAtom('ilst', metaAtom);
 
 		if (tags.artist) {
-			MP4Tree.createMetaDataNode('\xA9ART', ilstNode, tags.artist);
+			MP4Tree.createMetaDataAtom('\xA9ART', ilstAtom, tags.artist);
 		}
 
 		if (tags.title) {
-			MP4Tree.createMetaDataNode('\xA9nam', ilstNode, tags.title);
+			MP4Tree.createMetaDataAtom('\xA9nam', ilstAtom, tags.title);
 		}
 
 		if (tags.album) {
-			MP4Tree.createMetaDataNode('\xA9alb', ilstNode, tags.album);
+			MP4Tree.createMetaDataAtom('\xA9alb', ilstAtom, tags.album);
 		}
 
 		if (tags.genre) {
-			MP4Tree.createMetaDataNode('\xA9gen', ilstNode, tags.genre);
+			MP4Tree.createMetaDataAtom('\xA9gen', ilstAtom, tags.genre);
 		}
 
 		if (tags.comment) {
-			MP4Tree.createMetaDataNode('\xA9cmt', ilstNode, tags.comment);
+			MP4Tree.createMetaDataAtom('\xA9cmt', ilstAtom, tags.comment);
 		}
 
 		if (tags.desc) {
-			MP4Tree.createMetaDataNode('desc', ilstNode, tags.desc);
+			MP4Tree.createMetaDataAtom('desc', ilstAtom, tags.desc);
 		}
 
 		let trackString = '';
@@ -175,7 +175,7 @@ export class MP4Tree {
 				}
 
 				trackString += total + '\0\0';
-				MP4Tree.createMetaDataNode('\xA9cmt', ilstNode, trackString);
+				MP4Tree.createMetaDataAtom('\xA9cmt', ilstAtom, trackString);
 			} else {
 				console.log(`Invalid track number string ${tags.track}, skipped.`);
 			}
@@ -208,27 +208,27 @@ export class MP4Tree {
 		}
 
 		if (trackString) {
-			MP4Tree.createMetaDataNode('trkn', ilstNode, trackString);
+			MP4Tree.createMetaDataAtom('trkn', ilstAtom, trackString);
 		}
 
 		if (coverBuffer) {
-			MP4Tree.createMetaDataNode('covr', ilstNode, coverBuffer);
+			MP4Tree.createMetaDataAtom('covr', ilstAtom, coverBuffer);
 		}
 
-		metaNode.addChild(ilstNode);
+		metaAtom.addChild(ilstAtom);
 
-		metaNode.updateSizeAndOffset();
+		metaAtom.updateSizeAndOffset();
 
-		udtaNode.replaceOrAddChild('meta', metaNode);
-		// UdtaNode.addChild(metaNode);
-		moovNode.updateSizeAndOffset();
+		udtaAtom.replaceOrAddChild('meta', metaAtom);
+		// UdtaAtom.addChild(metaAtom);
+		moovAtom.updateSizeAndOffset();
 		// Remount moov
-		moovNode.parent = this.root;
+		moovAtom.parent = this.root;
 
 		// Has some problem since moov changed
-		const bufferOut = moovNode.dumpAll();
+		const bufferOut = moovAtom.dumpAll();
 
-		// This.replaceBox(moovNode, moovNode.dumpAll(), outFile);
+		// This.replaceBox(moovAtom, moovAtom.dumpAll(), outFile);
 		// await outFile.writeFile(bufferOut);
 		await this.replaceBox(boxStart, boxEnd, bufferOut, outPath);
 	}
