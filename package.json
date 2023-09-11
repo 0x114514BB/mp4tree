@@ -1,6 +1,6 @@
 {
   "name": "mp4tree",
-  "version": "0.9.10",
+  "version": "0.9.11",
   "description": "A micro library for parsing MP4 atom tree and editing MP4 metadata tags.",
   "main": "./lib/mp4Tree.js",
   "exports": "./lib/mp4Tree.js",
